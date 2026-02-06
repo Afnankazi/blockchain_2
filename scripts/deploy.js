@@ -9,14 +9,18 @@ async function main() {
   
   // Get account balance
   const balance = await deployer.provider.getBalance(deployer.address);
-  console.log("Account balance:", ethers.formatEther(balance), "ETH");
+  console.log("Account balance:", ethers.formatEther(balance), "MATIC");
   
-  // TODO: Add your contract deployment logic here
-  // Example:
-  // const ContractFactory = await ethers.getContractFactory("YourContract");
-  // const contract = await ContractFactory.deploy();
-  // await contract.waitForDeployment();
-  // console.log("Contract deployed to:", await contract.getAddress());
+  // Deploy SupplyChainSynthesizer
+  const SupplyChainSynthesizer = await ethers.getContractFactory("SupplyChainSynthesizer");
+  const contract = await SupplyChainSynthesizer.deploy();
+  await contract.waitForDeployment();
+  
+  const contractAddress = await contract.getAddress();
+  console.log("SupplyChainSynthesizer deployed to:", contractAddress);
+  console.log("");
+  console.log("📋 Update your .env file with:");
+  console.log(`NEXT_PUBLIC_CONTRACT_ADDRESS="${contractAddress}"`);
   
   console.log("Deployment completed!");
 }

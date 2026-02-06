@@ -16,6 +16,7 @@ export interface CreateOrderParams {
   deliveryHash: `0x${string}`;
 }
 
+// Use EntryPoint v0.7
 const ENTRYPOINT_ADDRESS_V07 = '0x0000000071727De22E5E9d8BAf0edAc6f37da032' as const;
 
 /**
@@ -59,6 +60,32 @@ export class PimlicoService {
   constructor(pimlicoApiKey: string, contractAddress: Address) {
     this.pimlicoApiKey = pimlicoApiKey;
     this.contractAddress = contractAddress;
+  }
+
+  /**
+   * Compute the smart account address for an EOA
+   * This is the counterfactual address that will be used when the EOA
+   * creates/uses a smart account through Pimlico
+   */
+  async getSmartAccountAddress(eoaAddress: Address): Promise<Address> {
+    const publicClient = createPublicClient({
+      transport: http('https://rpc-amoy.polygon.technology'),
+      chain: polygonAmoy,
+    });
+
+    // Create a mock signer just to compute the address
+    const mockSigner = {
+      signMessage: async () => '0x' as `0x${string}`,
+      signTypedData: async () => '0x' as `0x${string}`,
+      address: eoaAddress,
+    } as any;
+
+    const simpleAccount = await signerToSimpleSmartAccount(publicClient, {
+      signer: mockSigner,
+      entryPoint: ENTRYPOINT_ADDRESS_V07,
+    });
+
+    return simpleAccount.address;
   }
 
   /**
@@ -146,6 +173,9 @@ export class PimlicoService {
   /**
    * Create an order with GASLESS transaction
    * Pimlico pays ALL gas fees - user pays NOTHING!
+   * 
+   * IMPORTANT: The vendor address passed here should be the vendor's SMART ACCOUNT address
+   * so that when the vendor calls acceptOrder using their smart account, msg.sender matches.
    */
   async createOrderGasless(
     provider: any,
@@ -263,5 +293,74 @@ export class PimlicoService {
       status: result[3],
       deliveryHash: result[4],
     };
+  }
+
+  /**
+   * Get total order count from contract
+   */
+  async getOrderCount(): Promise<bigint> {
+    const publicClient = createPublicClient({
+      chain: polygonAmoy,
+      transport: http('https://rpc-amoy.polygon.technology'),
+    });
+
+    const result = await publicClient.readContract({
+      address: this.contractAddress,
+      abi: [
+        {
+          inputs: [],
+          name: 'orderCount',
+          outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+          stateMutability: 'view',
+          type: 'function',
+        },
+      ] as const,
+      functionName: 'orderCount',
+    });
+
+    return result;
+  }
+
+  /**
+   * Get all orders for a specific vendor
+   * Checks both EOA and smart account addresses to support all orders
+   */
+  async getOrdersForVendor(vendorAddress: Address, vendorSmartAccountAddress?: Address) {
+    const orderCount = await this.getOrderCount();
+    const orders: Array<{
+      orderId: bigint;
+      customer: Address;
+      vendor: Address;
+      ipfsHash: string;
+      status: number;
+      deliveryHash: `0x${string}`;
+    }> = [];
+
+    // Addresses to check - include both EOA and smart account
+    const addressesToCheck = [vendorAddress.toLowerCase()];
+    if (vendorSmartAccountAddress) {
+      addressesToCheck.push(vendorSmartAccountAddress.toLowerCase());
+    }
+
+    for (let i = BigInt(0); i < orderCount; i = i + BigInt(1)) {
+      try {
+        const order = await this.getOrder(i);
+        // Check if the order's vendor matches either the EOA or smart account address
+        if (addressesToCheck.includes(order.vendor.toLowerCase())) {
+          orders.push({
+            orderId: i,
+            customer: order.customer,
+            vendor: order.vendor,
+            ipfsHash: order.ipfsHash,
+            status: order.status,
+            deliveryHash: order.deliveryHash,
+          });
+        }
+      } catch (e) {
+        console.error(`Error fetching order ${i}:`, e);
+      }
+    }
+
+    return orders;
   }
 }

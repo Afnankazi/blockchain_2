@@ -1,0 +1,1 @@
+ALTER TABLE "item" ADD COLUMN "weight_unit" varchar(8) NOT NULL;

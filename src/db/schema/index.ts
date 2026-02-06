@@ -145,7 +145,7 @@ export const items = pgTable("item", {
   dimensionsUnit: varchar("dimensions_unit", { length: 8 }).notNull(),
   weight: decimal("weight", { precision: 10, scale: 2 }).notNull().default("0"),
   // TODO: Link to unit id, define relations
-  weightUnit: varchar("dimensions_unit", { length: 8 }).notNull(),
+  weightUnit: varchar("weight_unit", { length: 8 }).notNull(),
   // TODO: Link to warehouse id, define relations
   warehouse: varchar("warehouse").notNull(),
   sku: varchar("sku", { length: 128 }).notNull(),
